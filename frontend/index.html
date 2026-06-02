@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电商刷单异常检测系统</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="bi bi-shield-check"></i> 电商刷单异常检测系统
+            </span>
+            <div class="d-flex align-items-center">
+                <span class="badge bg-success me-3" id="statusBadge">
+                    <i class="bi bi-circle-fill"></i> 系统就绪
+                </span>
+                <button class="btn btn-outline-light btn-sm" onclick="trainModels()">
+                    <i class="bi bi-play-circle"></i> 训练模型
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <div class="container-fluid p-4">
+        <!-- 第一行：指标卡片 -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stat-card bg-primary bg-gradient">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">总交易订单</h6>
+                                <h2 class="card-title mb-0" id="totalOrders">-</h2>
+                            </div>
+                            <i class="bi bi-cart3 fs-1 text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card bg-danger bg-gradient">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">疑似刷单</h6>
+                                <h2 class="card-title mb-0" id="suspiciousOrders">-</h2>
+                            </div>
+                            <i class="bi bi-exclamation-triangle fs-1 text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card bg-warning bg-gradient">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-dark-50">异常占比</h6>
+                                <h2 class="card-title mb-0" id="anomalyRatio">-</h2>
+                            </div>
+                            <i class="bi bi-pie-chart fs-1 text-dark-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stat-card bg-success bg-gradient">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="card-subtitle mb-2 text-white-50">模型精确率</h6>
+                                <h2 class="card-title mb-0" id="modelPrecision">-</h2>
+                            </div>
+                            <i class="bi bi-bullseye fs-1 text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 阈值控制 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body py-2">
+                        <div class="d-flex align-items-center">
+                            <label class="form-label mb-0 me-3 fw-bold">
+                                <i class="bi bi-sliders"></i> 异常阈值调整
+                            </label>
+                            <input type="range" class="form-range w-50" id="thresholdSlider"
+                                   min="0" max="1" step="0.01" value="0.8"
+                                   oninput="updateThresholdDisplay(this.value)">
+                            <span class="badge bg-dark fs-6 ms-3" id="thresholdValue">0.80</span>
+                            <button class="btn btn-sm btn-primary ms-3" onclick="applyThreshold()">
+                                应用阈值
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据集拖拽上传区域 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-cloud-upload"></i> 数据集上传（支持拖拽）
+                    </div>
+                    <div class="card-body">
+                        <div id="dropZone" class="drop-zone">
+                            <div class="drop-zone-content">
+                                <i class="bi bi-file-earmark-spreadsheet fs-1 text-primary"></i>
+                                <p class="mt-2 mb-1 fw-bold">拖拽CSV数据集文件到此处</p>
+                                <p class="text-muted small">或点击选择文件</p>
+                                <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                                <button class="btn btn-outline-primary btn-sm mt-2" onclick="document.getElementById('fileInput').click()">
+                                    <i class="bi bi-folder2-open"></i> 选择文件
+                                </button>
+                            </div>
+                        </div>
+                        <div id="uploadProgress" class="mt-3" style="display: none;">
+                            <div class="progress">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%">
+                                    0%
+                                </div>
+                            </div>
+                            <p id="uploadStatus" class="text-muted small mt-1 mb-0">上传中...</p>
+                        </div>
+                        <div id="uploadResult" class="mt-3" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第二行：图表区域 -->
+        <div class="row mb-4">
+            <!-- 异常分数分布直方图 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-bar-chart"></i> 异常分数分布（复刻论文图3-1）
+                    </div>
+                    <div class="card-body">
+                        <div id="scoreDistributionChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- 特征重要性柱状图 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-bar-chart-fill"></i> 特征重要性分析（复刻论文图3-2）
+                    </div>
+                    <div class="card-body">
+                        <div id="featureImportanceChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第三行：图表区域 -->
+        <div class="row mb-4">
+            <!-- 算法性能对比 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-graph-up"></i> 三种算法性能对比（复刻论文表3-3）
+                    </div>
+                    <div class="card-body">
+                        <div id="algorithmComparisonChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- 参数调优AUC折线图 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-activity"></i> 参数调优AUC对照（复刻论文表3-2）
+                    </div>
+                    <div class="card-body">
+                        <div id="paramTuningChart" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第四行：刷单行为分析 -->
+        <div class="row mb-4">
+            <!-- 时段分布 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-clock"></i> 高风险订单时段分布
+                    </div>
+                    <div class="card-body">
+                        <div id="timeDistributionChart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- 设备分布 -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header">
+                        <i class="bi bi-phone"></i> 高风险订单设备分布
+                    </div>
+                    <div class="card-body">
+                        <div id="deviceDistributionChart" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 第五行：嫌疑订单表格 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-table"></i> 嫌疑订单查询表格（Top高风险刷单订单）</span>
+                        <span class="badge bg-danger" id="tableCount">0 条</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover table-striped">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>排名</th>
+                                        <th>用户ID</th>
+                                        <th>订单ID</th>
+                                        <th>异常分数</th>
+                                        <th>交易金额</th>
+                                        <th>下单间隔(秒)</th>
+                                        <th>凌晨下单</th>
+                                        <th>设备类型</th>
+                                        <th>风险等级</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ordersTableBody">
+                                    <tr>
+                                        <td colspan="9" class="text-center text-muted">加载中...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- 分页控件 -->
+                        <nav>
+                            <ul class="pagination justify-content-center" id="pagination">
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载提示Modal -->
+    <div class="modal fade" id="loadingModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mb-0" id="loadingText">正在训练模型，请稍候...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
