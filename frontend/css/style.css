@@ -259,3 +259,48 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: #64748b;
 }
+
+/* Spark 面板样式 */
+#sparkPanel .card {
+    border: 1px solid #e2e8f0;
+}
+
+#sparkPanel .nav-tabs .nav-link {
+    color: #64748b;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 12px 20px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+#sparkPanel .nav-tabs .nav-link:hover {
+    color: #2563eb;
+    border-bottom-color: #bfdbfe;
+}
+
+#sparkPanel .nav-tabs .nav-link.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    background: transparent;
+}
+
+#sparkPanel .tab-content {
+    background: #f8fafc;
+    border-radius: 0 0 12px 12px;
+}
+
+/* Streaming 统计卡片 */
+#spark-streaming-panel .card {
+    border: none;
+    transition: transform 0.2s ease;
+}
+
+#spark-streaming-panel .card:hover {
+    transform: translateY(-2px);
+}
+
+#spark-streaming-panel .card h4 {
+    font-size: 1.5rem;
+    font-weight: 700;
+}

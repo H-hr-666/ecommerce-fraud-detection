@@ -54,3 +54,14 @@ RAW_COLUMNS = ["user_id", "order_id", "amount", "time_diff", "order_time", "devi
 
 # 服务端口
 SERVER_PORT = 8000
+
+# Spark 配置
+SPARK_CONFIG = {
+    "driver_memory": "2g",
+    "shuffle_partitions": 4,
+    "streaming_rows_per_second": 5,
+    "streaming_buffer_size": 500
+}
+
+# Streaming checkpoint 目录
+SPARK_STREAMING_CHECKPOINT_DIR = os.path.join(DATA_DIR, "streaming_checkpoint")

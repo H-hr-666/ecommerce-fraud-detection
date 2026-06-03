@@ -11,7 +11,11 @@ const AppState = {
     charts: {},
     isLoading: false,
     totalPages: 0,
-    allOrders: []  // 缓存所有订单数据用于懒加载
+    allOrders: [],  // 缓存所有订单数据用于懒加载
+    // Spark 相关状态
+    sparkPanelVisible: false,
+    sparkHealthOk: false,
+    streamingRefreshTimer: null
 };
 
 /**
@@ -604,4 +608,331 @@ function showToast(message, type = 'info') {
     toastEl.addEventListener('hidden.bs.toast', () => {
         toastEl.remove();
     });
+}
+
+// ==================== Spark 功能函数 ====================
+
+/**
+ * 切换 Spark 面板显示/隐藏
+ */
+function toggleSparkPanel() {
+    const panel = document.getElementById('sparkPanel');
+    if (!panel) return;
+
+    AppState.sparkPanelVisible = !AppState.sparkPanelVisible;
+    panel.style.display = AppState.sparkPanelVisible ? 'block' : 'none';
+
+    // 首次打开时检查 Spark 健康状态
+    if (AppState.sparkPanelVisible && !AppState.sparkHealthOk) {
+        checkSparkHealth();
+    }
+}
+
+/**
+ * 检查 Spark 健康状态
+ */
+async function checkSparkHealth() {
+    try {
+        const data = await Api.getSparkHealth();
+        AppState.sparkHealthOk = true;
+        const badge = document.getElementById('sparkStatusBadge');
+        if (badge) {
+            badge.className = 'badge bg-light text-dark me-2';
+            badge.innerHTML = `<i class="bi bi-circle-fill text-success"></i> Spark ${data.spark_version}`;
+        }
+    } catch (error) {
+        AppState.sparkHealthOk = false;
+        const badge = document.getElementById('sparkStatusBadge');
+        if (badge) {
+            badge.className = 'badge bg-light text-dark me-2';
+            badge.innerHTML = '<i class="bi bi-circle-fill text-danger"></i> Spark 不可用';
+        }
+        console.error('Spark 健康检查失败:', error);
+    }
+}
+
+/**
+ * 加载 Spark SQL 分析数据
+ */
+async function loadSparkSqlData() {
+    showToast('正在加载 Spark SQL 分析数据...', 'info');
+
+    try {
+        // 并行加载所有 SQL 分析数据
+        const [hourly, device, segmentation, profiling] = await Promise.all([
+            Api.getSparkHourlyDistribution(),
+            Api.getSparkDeviceAnalysis(),
+            Api.getSparkAnomalySegmentation(),
+            Api.getSparkUserProfiling(10)
+        ]);
+
+        // 渲染图表
+        if (hourly) {
+            AppState.charts.sparkHourly = Charts.initSparkHourlyChart('sparkHourlyChart', hourly);
+        }
+        if (device) {
+            AppState.charts.sparkDevice = Charts.initSparkDeviceChart('sparkDeviceChart', device);
+        }
+        if (segmentation) {
+            AppState.charts.sparkSegmentation = Charts.initSparkSegmentationChart('sparkSegmentationChart', segmentation);
+        }
+        if (profiling) {
+            renderSparkUserProfiling(profiling);
+        }
+
+        showToast('Spark SQL 分析数据加载完成', 'success');
+    } catch (error) {
+        console.error('加载 Spark SQL 数据失败:', error);
+        showToast('Spark SQL 数据加载失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 渲染 Spark 用户画像表格
+ */
+function renderSparkUserProfiling(users) {
+    const tbody = document.getElementById('sparkUserProfilingBody');
+    if (!tbody) return;
+
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无数据</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = users.map(user => `
+        <tr>
+            <td><code>${user.user_id}</code></td>
+            <td>${user.order_count}</td>
+            <td>¥${user.avg_amount.toFixed(2)}</td>
+            <td>${user.avg_time_diff.toFixed(1)}</td>
+            <td><span class="badge ${user.rush_hour_orders > 0 ? 'bg-danger' : 'bg-success'}">${user.rush_hour_orders}</span></td>
+        </tr>
+    `).join('');
+}
+
+/**
+ * 训练 Spark MLlib 模型
+ */
+async function trainSparkModels() {
+    if (AppState.isLoading) return;
+
+    showToast('正在训练 Spark MLlib 模型，请稍候...', 'warning');
+
+    try {
+        const result = await Api.trainSparkModels();
+        console.log('Spark 训练结果:', result);
+
+        // 更新训练摘要
+        renderSparkTrainingSummary(result);
+
+        // 加载对比数据
+        await loadSparkComparison();
+
+        showToast('Spark MLlib 模型训练完成', 'success');
+    } catch (error) {
+        console.error('Spark 模型训练失败:', error);
+        showToast('Spark 模型训练失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 渲染 Spark 训练结果摘要
+ */
+function renderSparkTrainingSummary(result) {
+    const container = document.getElementById('sparkTrainingSummary');
+    if (!container || !result) return;
+
+    const kmeans = result.kmeans || {};
+    const gmm = result.gmm || {};
+
+    container.innerHTML = `
+        <div class="mb-3">
+            <h6 class="text-primary"><i class="bi bi-diagram-3"></i> KMeans</h6>
+            <table class="table table-sm table-borderless mb-0">
+                <tr><td class="text-muted">聚类数</td><td class="fw-bold">${kmeans.k || '-'}</td></tr>
+                <tr><td class="text-muted">训练耗时</td><td class="fw-bold">${kmeans.train_time || '-'}s</td></tr>
+                <tr><td class="text-muted">平均异常分</td><td class="fw-bold">${kmeans.avg_anomaly_score || '-'}</td></tr>
+                <tr><td class="text-muted">高分占比(>0.8)</td><td class="fw-bold">${(kmeans.high_score_ratio * 100 || 0).toFixed(1)}%</td></tr>
+            </table>
+        </div>
+        <div class="mb-3">
+            <h6 class="text-success"><i class="bi bi-layers"></i> GMM</h6>
+            <table class="table table-sm table-borderless mb-0">
+                <tr><td class="text-muted">分量数</td><td class="fw-bold">${gmm.k || '-'}</td></tr>
+                <tr><td class="text-muted">训练耗时</td><td class="fw-bold">${gmm.train_time || '-'}s</td></tr>
+                <tr><td class="text-muted">平均异常分</td><td class="fw-bold">${gmm.avg_anomaly_score || '-'}</td></tr>
+                <tr><td class="text-muted">高分占比(>0.8)</td><td class="fw-bold">${(gmm.high_score_ratio * 100 || 0).toFixed(1)}%</td></tr>
+            </table>
+        </div>
+    `;
+}
+
+/**
+ * 加载 Spark vs sklearn 模型对比
+ */
+async function loadSparkComparison() {
+    try {
+        const data = await Api.getSparkComparison();
+        if (data && data.algorithms && data.algorithms.length > 0) {
+            AppState.charts.sparkComparison = Charts.initSparkComparisonChart('sparkComparisonChart', data);
+        }
+    } catch (error) {
+        console.error('加载 Spark 对比数据失败:', error);
+    }
+}
+
+/**
+ * 启动 Streaming 实时检测
+ */
+async function startStreaming() {
+    const rowsPerSec = parseInt(document.getElementById('streamingRowsPerSec').value) || 5;
+
+    try {
+        const result = await Api.startStreaming(rowsPerSec);
+        console.log('Streaming 启动:', result);
+
+        // 更新 UI 状态
+        document.getElementById('btnStartStreaming').disabled = true;
+        document.getElementById('btnStopStreaming').disabled = false;
+        document.getElementById('streamingStatusBadge').className = 'badge bg-success';
+        document.getElementById('streamingStatusBadge').textContent = '运行中';
+
+        const modeBadge = document.getElementById('streamingModeBadge');
+        if (modeBadge) {
+            modeBadge.style.display = 'inline';
+            modeBadge.textContent = result.detection_mode === 'ml' ? 'ML模式(KMeans)' : '规则模式';
+            modeBadge.className = result.detection_mode === 'ml' ? 'badge bg-primary' : 'badge bg-info';
+        }
+
+        showToast('实时流检测已启动', 'success');
+
+        // 启动自动刷新
+        startStreamingAutoRefresh();
+
+    } catch (error) {
+        console.error('启动 Streaming 失败:', error);
+        showToast('启动失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 停止 Streaming 实时检测
+ */
+async function stopStreaming() {
+    try {
+        const result = await Api.stopStreaming();
+        console.log('Streaming 停止:', result);
+
+        // 更新 UI 状态
+        document.getElementById('btnStartStreaming').disabled = false;
+        document.getElementById('btnStopStreaming').disabled = true;
+        document.getElementById('streamingStatusBadge').className = 'badge bg-secondary';
+        document.getElementById('streamingStatusBadge').textContent = '已停止';
+
+        showToast('实时流检测已停止', 'info');
+
+        // 停止自动刷新
+        stopStreamingAutoRefresh();
+
+    } catch (error) {
+        console.error('停止 Streaming 失败:', error);
+        showToast('停止失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 启动 Streaming 自动刷新（每 3 秒）
+ */
+function startStreamingAutoRefresh() {
+    stopStreamingAutoRefresh();
+    AppState.streamingRefreshTimer = setInterval(async () => {
+        await refreshStreamingResults();
+        await refreshStreamingStatistics();
+    }, 3000);
+}
+
+/**
+ * 停止 Streaming 自动刷新
+ */
+function stopStreamingAutoRefresh() {
+    if (AppState.streamingRefreshTimer) {
+        clearInterval(AppState.streamingRefreshTimer);
+        AppState.streamingRefreshTimer = null;
+    }
+}
+
+/**
+ * 刷新 Streaming 检测结果表格
+ */
+async function refreshStreamingResults() {
+    try {
+        const results = await Api.getStreamingResults(30);
+        renderStreamingResults(results);
+    } catch (error) {
+        console.error('刷新 Streaming 结果失败:', error);
+    }
+}
+
+/**
+ * 渲染 Streaming 结果表格
+ */
+function renderStreamingResults(results) {
+    const tbody = document.getElementById('streamingResultsBody');
+    if (!tbody) return;
+
+    if (!results || results.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">暂无检测结果</td></tr>';
+        return;
+    }
+
+    // 反转顺序，最新在前
+    const reversed = [...results].reverse();
+
+    tbody.innerHTML = reversed.map(r => {
+        const statusBadge = r.is_anomaly
+            ? '<span class="badge bg-danger">异常</span>'
+            : '<span class="badge bg-success">正常</span>';
+        const scoreClass = r.anomaly_score > 0.5 ? 'text-danger fw-bold' : '';
+
+        return `
+            <tr>
+                <td><small>${r.timestamp || '-'}</small></td>
+                <td><code>${r.user_id}</code></td>
+                <td>¥${r.amount.toFixed(2)}</td>
+                <td>${r.time_diff.toFixed(1)}</td>
+                <td>${r.device_type}</td>
+                <td class="${scoreClass}">${r.anomaly_score.toFixed(4)}</td>
+                <td>${statusBadge}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * 刷新 Streaming 统计数据
+ */
+async function refreshStreamingStatistics() {
+    try {
+        const stats = await Api.getStreamingStatistics();
+
+        document.getElementById('streamTotalCount').textContent = stats.total_count || 0;
+        document.getElementById('streamAnomalyCount').textContent = stats.anomaly_count || 0;
+        document.getElementById('streamAnomalyRatio').textContent = ((stats.anomaly_ratio || 0) * 100).toFixed(1) + '%';
+        document.getElementById('streamAvgScore').textContent = (stats.avg_anomaly_score || 0).toFixed(3);
+
+        // 更新分数分布图（每 10 次刷新更新一次图表）
+        if (stats.total_count > 0 && stats.total_count % 50 < 5) {
+            try {
+                const results = await Api.getStreamingResults(200);
+                const scores = results.map(r => r.anomaly_score);
+                if (scores.length > 0) {
+                    AppState.charts.streamingScore = Charts.initStreamingScoreChart('streamingScoreChart', scores);
+                }
+            } catch (e) {
+                // 图表更新失败不影响主流程
+            }
+        }
+    } catch (error) {
+        console.error('刷新 Streaming 统计失败:', error);
+    }
 }

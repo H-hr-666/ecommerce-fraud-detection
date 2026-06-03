@@ -133,5 +133,98 @@ const Api = {
      */
     async getTrainingStatus() {
         return await this.request('/api/model/status');
+    },
+
+    // ==================== Spark 相关 API ====================
+
+    /**
+     * Spark 健康检查
+     */
+    async getSparkHealth() {
+        return await this.request('/api/spark/health');
+    },
+
+    /**
+     * Spark SQL 描述性统计
+     */
+    async getSparkDescriptiveStats() {
+        return await this.request('/api/spark/sql/descriptive-stats');
+    },
+
+    /**
+     * Spark SQL 小时分布
+     */
+    async getSparkHourlyDistribution() {
+        return await this.request('/api/spark/sql/hourly-distribution');
+    },
+
+    /**
+     * Spark SQL 设备分析
+     */
+    async getSparkDeviceAnalysis() {
+        return await this.request('/api/spark/sql/device-analysis');
+    },
+
+    /**
+     * Spark SQL 用户画像
+     */
+    async getSparkUserProfiling(limit = 100) {
+        return await this.request(`/api/spark/sql/user-profiling?limit=${limit}`);
+    },
+
+    /**
+     * Spark SQL 异常分段
+     */
+    async getSparkAnomalySegmentation() {
+        return await this.request('/api/spark/sql/anomaly-segmentation');
+    },
+
+    /**
+     * 训练 Spark MLlib 模型
+     */
+    async trainSparkModels() {
+        return await this.request('/api/spark/mllib/train', { method: 'POST' });
+    },
+
+    /**
+     * 获取 Spark vs sklearn 模型对比
+     */
+    async getSparkComparison() {
+        return await this.request('/api/spark/mllib/compare');
+    },
+
+    /**
+     * 启动 Streaming
+     */
+    async startStreaming(rowsPerSecond = 5) {
+        return await this.request(`/api/spark/streaming/start?rows_per_second=${rowsPerSecond}`, { method: 'POST' });
+    },
+
+    /**
+     * 停止 Streaming
+     */
+    async stopStreaming() {
+        return await this.request('/api/spark/streaming/stop', { method: 'POST' });
+    },
+
+    /**
+     * 获取 Streaming 状态
+     */
+    async getStreamingStatus() {
+        return await this.request('/api/spark/streaming/status');
+    },
+
+    /**
+     * 获取 Streaming 结果
+     */
+    async getStreamingResults(limit = 50) {
+        return await this.request(`/api/spark/streaming/results?limit=${limit}`);
+    },
+
+    /**
+     * 获取 Streaming 统计
+     */
+    async getStreamingStatistics() {
+        return await this.request('/api/spark/streaming/statistics');
     }
 };
