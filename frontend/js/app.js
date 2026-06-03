@@ -526,8 +526,9 @@ async function trainModels() {
     if (AppState.isLoading) return;
 
     AppState.isLoading = true;
-    const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
-    modal.show();
+    const loadingModalEl = document.getElementById('loadingModal');
+    const loadingModal = new bootstrap.Modal(loadingModalEl);
+    loadingModal.show();
 
     document.getElementById('statusBadge').className = 'badge bg-warning me-3';
     document.getElementById('statusBadge').innerHTML = '<i class="bi bi-hourglass-split"></i> 训练中';
@@ -549,10 +550,21 @@ async function trainModels() {
         showToast('模型训练失败: ' + error.message, 'danger');
     } finally {
         AppState.isLoading = false;
-        modal.hide();
 
         document.getElementById('statusBadge').className = 'badge bg-success me-3';
         document.getElementById('statusBadge').innerHTML = '<i class="bi bi-circle-fill"></i> 系统就绪';
+
+        // 先注册关闭事件，再关闭 modal
+        let aiShown = false;
+        const showOnce = () => {
+            if (aiShown) return;
+            aiShown = true;
+            showAiSummary();
+        };
+        loadingModalEl.addEventListener('hidden.bs.modal', showOnce, { once: true });
+        loadingModal.hide();
+        // 兜底：如果事件未触发，500ms 后强制弹出
+        setTimeout(showOnce, 500);
     }
 }
 
@@ -935,4 +947,234 @@ async function refreshStreamingStatistics() {
     } catch (error) {
         console.error('刷新 Streaming 统计失败:', error);
     }
+}
+
+// ==================== AI 综述功能 ====================
+
+/**
+ * 显示 AI 综述弹窗
+ */
+async function showAiSummary() {
+    console.log('[AI综述] 打开弹窗...');
+    const modalEl = document.getElementById('aiSummaryModal');
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    const body = document.getElementById('aiSummaryBody');
+    const timeEl = document.getElementById('aiSummaryTime');
+
+    // 显示加载状态
+    body.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted">正在生成 AI 综述报告...</p>
+        </div>
+    `;
+    timeEl.textContent = '';
+    modal.show();
+
+    try {
+        console.log('[AI综述] 请求API...');
+        const data = await Api.getAiSummary(AppState.currentThreshold);
+        console.log('[AI综述] API返回成功, sections:', data?.sections?.length);
+        renderAiSummary(data);
+        console.log('[AI综述] 渲染完成');
+    } catch (error) {
+        console.error('[AI综述] 失败:', error);
+        body.innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-exclamation-triangle text-warning fs-1"></i>
+                <p class="mt-3 text-danger">生成综述失败: ${error.message}</p>
+                <p class="text-muted">请先训练模型后再生成综述</p>
+                <button class="btn btn-primary btn-sm mt-2" onclick="refreshAiSummary()">
+                    <i class="bi bi-arrow-clockwise"></i> 重试
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * 刷新 AI 综述
+ */
+async function refreshAiSummary() {
+    const body = document.getElementById('aiSummaryBody');
+    const timeEl = document.getElementById('aiSummaryTime');
+
+    body.innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="text-muted">正在重新生成...</p>
+        </div>
+    `;
+
+    try {
+        const data = await Api.getAiSummary(AppState.currentThreshold);
+        renderAiSummary(data);
+    } catch (error) {
+        console.error('[AI综述] 刷新失败:', error);
+        body.innerHTML = `
+            <div class="text-center py-5">
+                <i class="bi bi-exclamation-triangle text-warning fs-1"></i>
+                <p class="mt-3 text-danger">生成失败: ${error.message}</p>
+                <button class="btn btn-primary btn-sm mt-2" onclick="refreshAiSummary()">
+                    <i class="bi bi-arrow-clockwise"></i> 重试
+                </button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * 渲染 AI 综述内容
+ */
+function renderAiSummary(data) {
+    const body = document.getElementById('aiSummaryBody');
+    const timeEl = document.getElementById('aiSummaryTime');
+
+    if (!data || !data.sections) {
+        body.innerHTML = '<p class="text-muted text-center py-4">暂无综述数据</p>';
+        return;
+    }
+
+    try {
+        let html = '';
+
+        // 一句话总结（顶部高亮）
+        if (data.summary) {
+            html += `
+                <div class="alert alert-dark border-start border-4 border-warning mb-4" role="alert">
+                    <i class="bi bi-lightbulb-fill text-warning me-2"></i>
+                    <strong>总结：</strong>${escapeHtml(data.summary)}
+                </div>
+            `;
+        }
+
+        // 各段落
+        data.sections.forEach(section => {
+            html += `
+                <div class="card mb-3 border-0 shadow-sm">
+                    <div class="card-header bg-light fw-bold">
+                        ${section.title}
+                    </div>
+                    <div class="card-body">
+                        <div class="ai-section-content">${formatMarkdown(section.content)}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        body.innerHTML = html;
+        timeEl.textContent = `生成时间：${data.generated_at || '-'}`;
+    } catch (error) {
+        console.error('渲染 AI 综述失败:', error);
+        // 降级：纯文本展示
+        let fallback = `<p class="mb-2"><strong>${escapeHtml(data.summary || '')}</strong></p>`;
+        data.sections.forEach(s => {
+            fallback += `<h6 class="mt-3">${escapeHtml(s.title)}</h6>`;
+            fallback += `<pre style="white-space:pre-wrap;font-size:0.85rem;">${escapeHtml(s.content)}</pre>`;
+        });
+        body.innerHTML = fallback;
+        timeEl.textContent = `生成时间：${data.generated_at || '-'}`;
+    }
+}
+
+/**
+ * 简易 Markdown 转 HTML
+ */
+function formatMarkdown(text) {
+    if (!text) return '';
+
+    // 先处理引用块（在 escapeHtml 之前，> 不会被转义）
+    let html = text;
+
+    // 表格处理（原始文本中用 | 分隔）
+    const lines = html.split('\n');
+    let result = [];
+    let inTable = false;
+    let tableRows = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        if (line.startsWith('|') && line.endsWith('|')) {
+            if (!inTable) {
+                inTable = true;
+                tableRows = [];
+            }
+            // 跳过分隔行
+            if (line.match(/^\|[\s\-|]+\|$/)) continue;
+            tableRows.push(line);
+        } else {
+            if (inTable && tableRows.length > 0) {
+                result.push(renderTable(tableRows));
+                tableRows = [];
+                inTable = false;
+            }
+            result.push(line);
+        }
+    }
+    if (inTable && tableRows.length > 0) {
+        result.push(renderTable(tableRows));
+    }
+
+    html = result.join('\n');
+
+    // 对每行分别处理（避免跨行匹配问题）
+    html = html.split('\n').map(line => {
+        // 引用块（原始 > 字符）
+        if (line.startsWith('> ')) {
+            return `<blockquote class="blockquote ps-3 border-start border-3 border-info text-muted small">${escapeHtml(line.slice(2))}</blockquote>`;
+        }
+        // 加粗
+        line = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // 代码
+        line = line.replace(/`([^`]+)`/g, '<code class="bg-light px-1 rounded">$1</code>');
+        // 对非标签内容做 HTML 转义（保留已生成的 HTML 标签）
+        return line;
+    }).join('\n');
+
+    // 换行转 <br>
+    html = html.replace(/\n/g, '<br>');
+    // 清理标签间的多余 <br>
+    html = html.replace(/<br>\s*(<\/?(div|table|thead|tbody|tr|blockquote|strong|code))/g, '$1');
+    html = html.replace(/(<\/(div|table|thead|tbody|tr|blockquote|strong|code)>)\s*<br>/g, '$1');
+    // 清理连续 <br>
+    html = html.replace(/(<br>){3,}/g, '<br><br>');
+
+    return html;
+}
+
+/**
+ * 渲染简易表格
+ */
+function renderTable(rows) {
+    if (rows.length === 0) return '';
+
+    let html = '<div class="table-responsive"><table class="table table-sm table-bordered mt-2 mb-2">';
+
+    rows.forEach((row, idx) => {
+        const cells = row.split('|').filter(c => c.trim() !== '');
+        const tag = idx === 0 ? 'th' : 'td';
+        const cls = idx === 0 ? ' class="table-dark"' : '';
+        html += `<tr${cls}>`;
+        cells.forEach(cell => {
+            html += `<${tag}>${cell.trim()}</${tag}>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</table></div>';
+    return html;
+}
+
+/**
+ * HTML 转义
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

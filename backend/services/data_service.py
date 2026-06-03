@@ -61,6 +61,10 @@ def generate_sample_dataset(n_samples: int = 38662) -> pd.DataFrame:
     # 随机打乱
     df = df.sample(frac=1, random_state=42).reset_index(drop=True)
 
+    # 添加 is_cheat 标签列（0=正常，1=刷单）
+    df["is_cheat"] = 0
+    df.loc[n_normal:, "is_cheat"] = 1
+
     # 添加少量缺失值（模拟真实数据）
     missing_idx = np.random.choice(n_samples, size=int(n_samples * 0.02), replace=False)
     df.loc[missing_idx[:len(missing_idx)//2], "amount"] = np.nan
@@ -97,7 +101,7 @@ def load_dataset(file_path: Optional[str] = None) -> pd.DataFrame:
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    数据清洗：删除关键字段缺失的记录
+    数据清洗：删除关键字段缺失的记录，保留 is_cheat 标签列
 
     Args:
         df: 原始数据
@@ -109,6 +113,12 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # 删除amount和time_diff缺失的行
     df_cleaned = df.dropna(subset=["amount", "time_diff"])
+
+    # 确保 is_cheat 列存在且为整数类型
+    if "is_cheat" in df_cleaned.columns:
+        df_cleaned["is_cheat"] = df_cleaned["is_cheat"].fillna(0).astype(int)
+    else:
+        df_cleaned["is_cheat"] = 0
 
     cleaned_count = len(df_cleaned)
     removed_count = original_count - cleaned_count
@@ -147,6 +157,12 @@ def get_descriptive_stats(df: pd.DataFrame) -> Dict:
         "rush_hour_ratio": round(float((df["order_time"].between(1, 6)).mean()), 4),
         "device_distribution": df["device_type"].value_counts().to_dict()
     }
+
+    # 真实标签统计（is_cheat 列）
+    if "is_cheat" in df.columns:
+        cheat_count = int(df["is_cheat"].sum())
+        stats["labeled_fraud_count"] = cheat_count
+        stats["labeled_fraud_ratio"] = round(cheat_count / len(df), 4)
 
     return stats
 

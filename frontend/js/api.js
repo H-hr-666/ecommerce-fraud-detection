@@ -129,6 +129,17 @@ const Api = {
     },
 
     /**
+     * 获取 AI 智能综述
+     */
+    async getAiSummary(threshold = null) {
+        let url = '/api/analysis/ai-summary';
+        if (threshold !== null) {
+            url += `?threshold=${threshold}`;
+        }
+        return await this.request(url);
+    },
+
+    /**
      * 获取训练状态
      */
     async getTrainingStatus() {

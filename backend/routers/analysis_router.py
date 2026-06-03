@@ -15,6 +15,7 @@ from services.evaluation_service import (
     get_top_risk_orders, get_time_distribution,
     get_device_distribution
 )
+from services.summary_service import generate_summary
 from utils.helpers import format_response, paginate_list
 from config import DEFAULT_THRESHOLD
 
@@ -240,3 +241,99 @@ async def update_threshold(threshold: float = Query(..., ge=0, le=1)):
         "old_threshold": old_threshold,
         "new_threshold": threshold
     }, "阈值更新成功")
+
+
+@router.get("/ai-summary")
+async def get_ai_summary(
+    threshold: Optional[float] = Query(None, ge=0, le=1, description="异常阈值")
+):
+    """
+    生成 AI 智能综述报告
+
+    基于当前训练结果和分析数据，自动生成结构化的分析报告，
+    包含数据概览、模型评估、特征分析、风险发现和建议。
+
+    Returns:
+        结构化综述数据
+    """
+    try:
+        from routers.model_router import training_state
+
+        thresh = threshold if threshold is not None else current_threshold["value"]
+
+        # 收集概览数据
+        if training_state["metrics"] is not None:
+            df = load_dataset()
+            df_cleaned = training_state["df_original"]
+            scores = training_state["anomaly_scores"]["isolation_forest"]
+            metrics = training_state["metrics"]
+
+            total_orders = len(df)
+            cleaned_samples = len(df_cleaned)
+            removed_samples = total_orders - cleaned_samples
+            suspicious_orders = int((scores >= thresh).sum())
+            anomaly_ratio = round(suspicious_orders / cleaned_samples, 4)
+
+            overview = {
+                "total_orders": total_orders,
+                "cleaned_samples": cleaned_samples,
+                "removed_samples": removed_samples,
+                "suspicious_orders": suspicious_orders,
+                "anomaly_ratio": anomaly_ratio
+            }
+        else:
+            overview = {
+                "total_orders": 0,
+                "cleaned_samples": 0,
+                "removed_samples": 0,
+                "suspicious_orders": 0,
+                "anomaly_ratio": 0
+            }
+            metrics = None
+
+        # 收集特征重要性
+        feature_importance = training_state.get("feature_importance") or {}
+
+        # 收集高风险订单
+        top_orders = []
+        if training_state["anomaly_scores"] is not None and training_state["df_original"] is not None:
+            top_orders = get_top_risk_orders(
+                training_state["df_original"],
+                training_state["anomaly_scores"]["isolation_forest"],
+                n_top=50
+            )
+
+        # 收集时段分布
+        time_dist = {}
+        if training_state["anomaly_scores"] is not None and training_state["df_original"] is not None:
+            time_dist = get_time_distribution(
+                training_state["df_original"],
+                training_state["anomaly_scores"]["isolation_forest"],
+                thresh
+            )
+
+        # 收集设备分布
+        device_dist = {}
+        if training_state["anomaly_scores"] is not None and training_state["df_original"] is not None:
+            device_dist = get_device_distribution(
+                training_state["df_original"],
+                training_state["anomaly_scores"]["isolation_forest"],
+                thresh
+            )
+
+        # 生成综述
+        result = generate_summary(
+            overview=overview,
+            metrics=metrics,
+            feature_importance=feature_importance,
+            top_orders=top_orders,
+            time_dist=time_dist,
+            device_dist=device_dist,
+            threshold=thresh
+        )
+
+        return format_response(result)
+
+    except Exception as e:
+        logger.error(f"生成 AI 综述失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

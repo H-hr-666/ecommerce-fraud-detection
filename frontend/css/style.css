@@ -304,3 +304,56 @@ body {
     font-size: 1.5rem;
     font-weight: 700;
 }
+
+/* AI 综述弹窗 */
+#aiSummaryModal .modal-lg {
+    max-width: 800px;
+}
+
+#aiSummaryModal .modal-header {
+    border-bottom: 3px solid #d97706;
+}
+
+#aiSummaryBody .alert {
+    font-size: 0.95rem;
+    line-height: 1.7;
+}
+
+#aiSummaryBody .card-header {
+    font-size: 1rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+#aiSummaryBody .ai-section-content {
+    font-size: 0.9rem;
+    line-height: 1.8;
+    color: #334155;
+}
+
+#aiSummaryBody .ai-section-content strong {
+    color: #1e293b;
+}
+
+#aiSummaryBody .ai-section-content blockquote {
+    font-size: 0.85rem;
+    margin: 0.5rem 0;
+}
+
+#aiSummaryBody .ai-section-content code {
+    font-size: 0.85rem;
+}
+
+#aiSummaryBody .ai-section-content .table {
+    font-size: 0.85rem;
+}
+
+#aiSummaryBody .ai-section-content .table th {
+    background-color: #1e293b;
+    color: white;
+    font-weight: 600;
+    padding: 8px 12px;
+}
+
+#aiSummaryBody .ai-section-content .table td {
+    padding: 6px 12px;
+}

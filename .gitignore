@@ -34,8 +34,9 @@ ENV/
 # Model files (large files)
 backend/models/*.pkl
 
-# Data files (large files)
+# Data files (large files) - 保留内置数据集
 backend/data/*.csv
+!backend/data/ecommerce_transactions.csv
 
 # Logs
 *.log
@@ -44,3 +45,9 @@ backend/data/*.csv
 # OS
 .DS_Store
 Thumbs.db
+
+# Spark streaming checkpoint
+backend/data/streaming_checkpoint/
+
+# Spark models
+backend/models/spark/

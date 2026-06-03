@@ -55,8 +55,13 @@ def get_spark_session(app_name: str = "EcommerceFraudDetection") -> SparkSession
             .config("spark.sql.shuffle.partitions", str(SPARK_CONFIG["shuffle_partitions"]))
             .config("spark.default.parallelism", str(SPARK_CONFIG["shuffle_partitions"]))
             .config("spark.ui.enabled", "false")
+            .config("spark.eventLog.enabled", "false")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
             .config("spark.driver.bindAddress", "127.0.0.1")
+            # 强制使用本地文件系统，避免 PySpark 默认尝试连接 HDFS
+            .config("spark.hadoop.fs.defaultFS", "file:///")
+            .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse")
+            .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
             .getOrCreate()
         )
         _spark_session.sparkContext.setLogLevel("WARN")

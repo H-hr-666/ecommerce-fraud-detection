@@ -1,6 +1,6 @@
-# 电商刷单异常检测系统 v2.0.0
+# 电商刷单异常检测系统 v2.1.0
 
-基于《电商平台刷单行为的异常检测论文》开发的 Python 后端 + Web 前端可视化平台，集成 Spark 大数据分析能力。
+基于《电商平台刷单行为的异常检测论文》开发的 Python 后端 + Web 前端可视化平台，集成 Spark 大数据分析与 AI 智能综述。
 
 ## 项目简介
 
@@ -9,7 +9,7 @@
 - **sklearn 引擎**：孤立森林（Isolation Forest）、LOF、One-Class SVM 三种算法的训练、预测与评估
 - **Spark 引擎**：Spark SQL 多维分析、MLlib 分布式模型训练（KMeans/GMM）、Structured Streaming 实时检测
 
-前端提供交互式可视化大屏，支持阈值调整、模型训练、数据集上传、实时流检测等功能。
+前端提供交互式可视化大屏，支持阈值调整、模型训练、数据集上传、实时流检测、AI 智能综述等功能。
 
 ## 系统架构
 
@@ -20,6 +20,9 @@
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐  │
 │  │ 指标概览  │ │ 图表分析  │ │ 订单查询  │ │ Spark面板  │  │
 │  └──────────┘ └──────────┘ └──────────┘ └────────────┘  │
+│  ┌────────────────────┐                                  │
+│  │ AI 智能综述（弹窗） │                                  │
+│  └────────────────────┘                                  │
 └────────────────────────┬────────────────────────────────┘
                          │ HTTP API
 ┌────────────────────────┴────────────────────────────────┐
@@ -33,6 +36,9 @@
 │  │ data_service  │ │model_service │ │  spark_modules   │ │
 │  │ 数据加载/清洗 │ │训练/预测/持久化│ │ SQL/MLlib/Stream │ │
 │  └──────────────┘ └──────────────┘ └──────────────────┘ │
+│  ┌───────────────────────────────┐                       │
+│  │ summary_service (AI 综述)     │                       │
+│  └───────────────────────────────┘                       │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -55,20 +61,21 @@
 ```
 ecommerce_fraud_detection/
 ├── backend/                            # 后端服务
-│   ├── main.py                         # FastAPI 应用入口（v2.0.0）
+│   ├── main.py                         # FastAPI 应用入口（v2.1.0）
 │   ├── config.py                       # 全局配置（模型参数、Spark 配置）
 │   ├── requirements.txt                # Python 依赖
 │   ├── data/                           # 数据目录（CSV + Streaming checkpoint）
 │   ├── models/                         # 模型存储（sklearn pkl + Spark model）
 │   ├── services/                       # 业务服务层
-│   │   ├── data_service.py             # 数据加载、清洗、模拟数据生成
+│   │   ├── data_service.py             # 数据加载、清洗、标签处理
 │   │   ├── feature_service.py          # 特征工程（4 特征构造 + Z-Score 标准化）
 │   │   ├── model_service.py            # sklearn 模型训练、预测、网格搜索
-│   │   └── evaluation_service.py       # 模型评估、指标计算、分布分析
+│   │   ├── evaluation_service.py       # 模型评估、指标计算、分布分析
+│   │   └── summary_service.py          # AI 智能综述生成（本地模板引擎）
 │   ├── routers/                        # API 路由层
 │   │   ├── data_router.py              # 数据统计、分布、上传接口
 │   │   ├── model_router.py             # 模型训练、指标、特征重要性、参数调优
-│   │   ├── analysis_router.py          # 高风险订单、时段/设备分布、阈值控制
+│   │   ├── analysis_router.py          # 高风险订单、时段/设备分布、阈值、AI综述
 │   │   └── spark_router.py             # Spark SQL/MLlib/Streaming 全部接口
 │   ├── spark_modules/                  # Spark 功能模块
 │   │   ├── spark_session.py            # SparkSession 单例管理（线程安全）
@@ -79,13 +86,13 @@ ecommerce_fraud_detection/
 │       └── helpers.py                  # 日志配置、响应格式化、分页
 │
 ├── frontend/                           # 前端页面
-│   ├── index.html                      # 主页面（含 Spark 分析面板）
+│   ├── index.html                      # 主页面（含 Spark 面板 + AI 综述弹窗）
 │   ├── css/
-│   │   └── style.css                   # 自定义样式（含 Spark/Streaming 样式）
+│   │   └── style.css                   # 自定义样式
 │   └── js/
-│       ├── api.js                      # API 调用封装（含 Spark 全部接口）
+│       ├── api.js                      # API 调用封装（含 Spark/AI 综述接口）
 │       ├── charts.js                   # ECharts 图表（含 Spark 专用图表）
-│       └── app.js                      # 主逻辑（含 Spark/Streaming 交互）
+│       └── app.js                      # 主逻辑（含 Spark/Streaming/AI 综述）
 │
 ├── .gitignore                          # Git 忽略规则
 └── README.md                           # 项目说明
@@ -123,8 +130,9 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 打开浏览器访问：**http://localhost:8000**
 
-- 首次访问会自动生成模拟数据集（38662 条记录）
+- 首次访问会自动加载内置数据集
 - 点击页面右上角「训练模型」按钮，训练完成后查看全部图表
+- 训练完成后自动弹出 AI 智能综述报告
 
 ## API 接口文档
 
@@ -134,7 +142,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 | 接口 | 方法 | 说明 |
 |------|------|------|
-| `/api/data/stats` | GET | 数据集统计信息（样本量、均值、标准差等） |
+| `/api/data/stats` | GET | 数据集统计信息（样本量、均值、标准差、标签分布） |
 | `/api/data/distribution` | GET | 异常分数分布直方图数据 |
 | `/api/data/upload` | POST | 上传自定义 CSV 数据集 |
 
@@ -157,6 +165,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 | `/api/analysis/time-distribution` | GET | 高风险订单时段分布 |
 | `/api/analysis/device-distribution` | GET | 高风险订单设备分布 |
 | `/api/analysis/threshold` | POST | 更新异常分数阈值 |
+| `/api/analysis/ai-summary` | GET | AI 智能综述报告 |
 
 ### Spark 接口 (`/api/spark`)
 
@@ -221,12 +230,17 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - 实时统计：总检测数、异常数、异常率、平均分数
 - 结果表格 + 分数分布图自动刷新（3 秒间隔）
 
-### 9. 数据集上传
+### 9. AI 智能综述
+- 基于检测数据的本地模板引擎，不依赖外部 API
+- 自动生成 5 段式分析报告：数据概览、模型评估、特征分析、风险发现、建议
+- 触发方式：训练完成后自动弹出 + 手动点击「AI 综述」按钮
+
+### 10. 数据集上传
 - 支持拖拽或点击上传 CSV 文件
 - 自动验证字段完整性（需包含 amount、time_diff）
 - 上传后需重新训练模型
 
-### 10. 嫌疑订单查询表格
+### 11. 嫌疑订单查询表格
 - 分页展示 Top 高风险订单
 - 异常分数降序排序
 - 风险等级标签（极高/高/中/低）
@@ -246,17 +260,39 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ## 数据集
 
-系统首次运行时会自动生成模拟数据集（38662 条记录，约 5% 刷单样本），如需使用真实数据集：
+### 内置真实数据集
 
-1. 从 Kaggle 下载电商交易数据集
-2. 将 CSV 文件放置到 `backend/data/ecommerce_transactions.csv`
-3. 确保包含字段：`user_id`, `order_id`, `amount`, `time_diff`, `order_time`, `device_type`
+系统内置真实电商交易数据集，包含人工标注的刷单标签：
 
-或通过前端拖拽上传 / API 上传：
+| 属性 | 值 |
+|------|------|
+| 文件 | `backend/data/ecommerce_transactions.csv` |
+| 总记录数 | 10,000 条 |
+| 刷单记录 | 95 条（`is_cheat=1`） |
+| 正常记录 | 9,905 条（`is_cheat=0`） |
+| 刷单比例 | 0.95% |
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `user_id` | string | 用户编号 |
+| `order_id` | string | 订单编号 |
+| `amount` | float | 交易金额 |
+| `time_diff` | float | 下单时间间隔（秒） |
+| `order_time` | int | 下单时间（小时，0-23） |
+| `device_type` | string | 设备类型（iOS/Android/PC/H5） |
+| `is_cheat` | int | 刷单标签（0=正常，1=刷单） |
+
+### 使用自定义数据集
+
+支持上传自定义 CSV 数据集：
 
 ```bash
 curl -X POST http://localhost:8000/api/data/upload -F "file=@your_dataset.csv"
 ```
+
+或通过前端页面拖拽上传。
 
 ## 论文参考
 
@@ -268,6 +304,7 @@ curl -X POST http://localhost:8000/api/data/upload -F "file=@your_dataset.csv"
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.1.0 | 2026-06-03 | 替换为真实标注数据集（10,000 条，95 条刷单）；新增 `is_cheat` 标签列支持；新增 AI 智能综述功能；修复 Spark MLlib 模型覆盖写入问题；修复前端 Modal 冲突和缓存问题 |
 | v2.0.0 | 2026-06-03 | 集成 Spark 大数据分析：Spark SQL 多维分析、MLlib 模型训练（KMeans/GMM）、Structured Streaming 实时检测；前端新增 Spark 分析面板；数据集拖拽上传 |
 | v1.0.0 | 2026-06-02 | 初始版本：sklearn 三算法（Isolation Forest/LOF/OCSVM）训练与评估；可视化大屏；参数调优；嫌疑订单查询 |
 

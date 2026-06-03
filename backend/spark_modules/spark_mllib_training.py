@@ -229,7 +229,7 @@ def train_gmm(df: DataFrame, k: int = 2) -> Tuple[Dict, any, DataFrame]:
 
 def save_spark_model(model, model_name: str):
     """
-    保存 Spark MLlib 模型到磁盘
+    保存 Spark MLlib 模型到磁盘（覆盖已有模型）
 
     Args:
         model: Spark ML 模型
@@ -237,7 +237,7 @@ def save_spark_model(model, model_name: str):
     """
     os.makedirs(SPARK_MODEL_DIR, exist_ok=True)
     model_path = os.path.join(SPARK_MODEL_DIR, model_name)
-    model.save(model_path)
+    model.write().overwrite().save(model_path)
     logger.info(f"Spark 模型已保存: {model_path}")
 
 

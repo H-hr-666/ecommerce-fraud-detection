@@ -50,7 +50,7 @@ DEFAULT_THRESHOLD = 0.8
 FEATURE_COLUMNS = ["log_amount", "time_diff", "is_rush_hour", "device_type"]
 
 # 原始数据字段
-RAW_COLUMNS = ["user_id", "order_id", "amount", "time_diff", "order_time", "device_type"]
+RAW_COLUMNS = ["user_id", "order_id", "amount", "time_diff", "order_time", "device_type", "is_cheat"]
 
 # 服务端口
 SERVER_PORT = 8000
