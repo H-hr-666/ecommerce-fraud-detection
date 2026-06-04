@@ -29,6 +29,7 @@ def generate_timeseries(csv_path: str, n_days: int = 90) -> pd.DataFrame:
         日级时序 DataFrame（date, daily_amount, daily_count, avg_price, rush_ratio）
     """
     df = pd.read_csv(csv_path)
+    logger.info(f"加载时序源数据: {csv_path} ({len(df)} 条记录)")
 
     # 统计各小时的订单量和金额分布
     hourly_stats = df.groupby("order_time").agg(

@@ -30,6 +30,12 @@ _ts_state = {
 
 
 def _get_csv_path():
+    # 使用 37,221 条完整交易数据集
+    ts_csv = "/data/data/com.termux/files/home/Downloads/ecommerce_transactions.csv"
+    import os
+    if os.path.exists(ts_csv):
+        return ts_csv
+    # 回退到默认数据集
     from config import DATASET_PATH
     return DATASET_PATH
 
