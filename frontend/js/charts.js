@@ -675,5 +675,210 @@ const Charts = {
 
         chart.setOption(option);
         return chart;
+    },
+
+    // ==================== 时序分析图表 ====================
+
+    /**
+     * 时序折线图（原始数据 + 拟合值 + 预测值）
+     */
+    initTimeseriesChart(containerId, data) {
+        const chart = echarts.init(document.getElementById(containerId));
+
+        const series = [
+            {
+                name: '实际值',
+                type: 'line',
+                data: data.actual,
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 4,
+                itemStyle: { color: '#2563eb' },
+                lineStyle: { width: 2 }
+            }
+        ];
+
+        if (data.fitted_sarima) {
+            series.push({
+                name: 'SARIMA 拟合',
+                type: 'line',
+                data: data.fitted_sarima,
+                smooth: true,
+                symbol: 'none',
+                itemStyle: { color: '#16a34a' },
+                lineStyle: { width: 2, type: 'dashed' }
+            });
+        }
+
+        if (data.forecast) {
+            series.push({
+                name: '预测值',
+                type: 'line',
+                data: data.forecast,
+                smooth: true,
+                symbol: 'diamond',
+                symbolSize: 6,
+                itemStyle: { color: '#dc2626' },
+                lineStyle: { width: 2, type: 'dotted' }
+            });
+            series.push({
+                name: '95% 置信上界',
+                type: 'line',
+                data: data.upper_bound,
+                symbol: 'none',
+                itemStyle: { color: 'transparent' },
+                lineStyle: { width: 0 },
+                areaStyle: { color: 'rgba(220,38,38,0.1)' },
+                stack: 'confidence'
+            });
+            series.push({
+                name: '95% 置信下界',
+                type: 'line',
+                data: data.lower_bound,
+                symbol: 'none',
+                itemStyle: { color: 'rgba(220,38,38,0.1)' },
+                lineStyle: { width: 0 },
+                areaStyle: { color: '#fff' },
+                stack: 'confidence'
+            });
+        }
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'cross' }
+            },
+            legend: {
+                data: series.map(s => s.name).filter(n => !n.includes('置信')),
+                bottom: 0
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '15%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: data.dates,
+                axisLabel: {
+                    rotate: 45,
+                    fontSize: 10,
+                    formatter: function(val) {
+                        return val.slice(5); // MM-DD
+                    }
+                }
+            },
+            yAxis: {
+                type: 'value',
+                name: '日交易额 (¥)',
+                axisLabel: {
+                    formatter: function(val) {
+                        return (val / 1000).toFixed(0) + 'k';
+                    }
+                }
+            },
+            series: series
+        };
+
+        chart.setOption(option);
+        return chart;
+    },
+
+    /**
+     * ACF/PACF 柱状图
+     */
+    initAcfPacfChart(containerId, data, title) {
+        const chart = echarts.init(document.getElementById(containerId));
+
+        const option = {
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                top: '15%',
+                containLabel: true
+            },
+            title: {
+                text: title,
+                left: 'center',
+                textStyle: { fontSize: 13 }
+            },
+            xAxis: {
+                type: 'category',
+                data: data.lags.map(l => l.toString()),
+                name: '滞后阶数'
+            },
+            yAxis: {
+                type: 'value',
+                name: '相关系数'
+            },
+            series: [
+                {
+                    type: 'bar',
+                    data: data.values.map((v, i) => ({
+                        value: v,
+                        itemStyle: {
+                            color: Math.abs(v) > data.conf_bound ? '#dc2626' : '#2563eb',
+                            borderRadius: [2, 2, 0, 0]
+                        }
+                    }))
+                },
+                {
+                    type: 'line',
+                    data: data.lags.map(() => data.conf_bound),
+                    symbol: 'none',
+                    lineStyle: { color: '#dc2626', type: 'dashed', width: 1 },
+                    name: '置信上界'
+                },
+                {
+                    type: 'line',
+                    data: data.lags.map(() => -data.conf_bound),
+                    symbol: 'none',
+                    lineStyle: { color: '#dc2626', type: 'dashed', width: 1 },
+                    name: '置信下界'
+                }
+            ]
+        };
+
+        chart.setOption(option);
+        return chart;
+    },
+
+    /**
+     * 模型评估对比柱状图
+     */
+    initTsEvalChart(containerId, arimaEval, sarimaEval) {
+        const chart = echarts.init(document.getElementById(containerId));
+
+        const metrics = ['MAE', 'RMSE', 'MAPE'];
+        const option = {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { data: ['ARIMA', 'SARIMA'], bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+            xAxis: { type: 'category', data: metrics },
+            yAxis: { type: 'value' },
+            series: [
+                {
+                    name: 'ARIMA',
+                    type: 'bar',
+                    data: metrics.map(m => arimaEval[m]),
+                    itemStyle: { color: '#2563eb', borderRadius: [4, 4, 0, 0] }
+                },
+                {
+                    name: 'SARIMA',
+                    type: 'bar',
+                    data: metrics.map(m => sarimaEval[m]),
+                    itemStyle: { color: '#16a34a', borderRadius: [4, 4, 0, 0] }
+                }
+            ]
+        };
+
+        chart.setOption(option);
+        return chart;
     }
 };

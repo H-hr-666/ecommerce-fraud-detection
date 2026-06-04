@@ -1178,3 +1178,253 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ==================== 时序分析功能 ====================
+
+/**
+ * 切换时序分析面板显示/隐藏
+ */
+function toggleTsPanel() {
+    const panel = document.getElementById('tsPanel');
+    if (!panel) return;
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+/**
+ * 加载时序数据
+ */
+async function loadTimeseriesData() {
+    showToast('正在生成时序数据...', 'info');
+    try {
+        const data = await Api.getTimeseriesData();
+        console.log('[时序] 数据加载完成:', data.length, '天');
+
+        // 绘制时序折线图
+        const chartData = {
+            dates: data.dates,
+            actual: data.daily_amount
+        };
+        AppState.charts.tsLine = Charts.initTimeseriesChart('tsLineChart', chartData);
+
+        // 显示统计信息
+        const amounts = data.daily_amount;
+        const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+        const max = Math.max(...amounts);
+        const min = Math.min(...amounts);
+        document.getElementById('tsStatsInfo').innerHTML = `
+            <div class="card card-body py-2">
+                <strong>时序统计：</strong>
+                共 ${data.length} 天 |
+                日均交易额 ¥${avg.toLocaleString(undefined, {maximumFractionDigits:0})} |
+                最高 ¥${max.toLocaleString()} |
+                最低 ¥${min.toLocaleString()} |
+                日均订单 ${Math.round(data.daily_count.reduce((a,b)=>a+b,0)/data.length)} 笔
+            </div>
+        `;
+
+        // 更新状态
+        const badge = document.getElementById('tsStatusBadge');
+        badge.className = 'badge bg-light text-dark me-2';
+        badge.innerHTML = `<i class="bi bi-circle-fill text-success"></i> ${data.length} 天数据`;
+
+        showToast('时序数据加载完成', 'success');
+    } catch (error) {
+        console.error('[时序] 数据加载失败:', error);
+        showToast('时序数据加载失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 执行平稳性检验
+ */
+async function runStationarityTest() {
+    showToast('正在执行 ADF 检验...', 'info');
+    try {
+        const data = await Api.getTimeseriesStationarity();
+        console.log('[时序] 平稳性检验完成');
+
+        // ACF 图
+        if (data.acf_pacf) {
+            const acfData = {
+                lags: data.acf_pacf.lags,
+                values: data.acf_pacf.acf,
+                conf_bound: data.acf_pacf.conf_upper
+            };
+            AppState.charts.acf = Charts.initAcfPacfChart('acfChart', acfData, 'ACF 自相关函数');
+
+            const pacfData = {
+                lags: data.acf_pacf.lags,
+                values: data.acf_pacf.pacf,
+                conf_bound: data.acf_pacf.conf_upper
+            };
+            AppState.charts.pacf = Charts.initAcfPacfChart('pacfChart', pacfData, 'PACF 偏自相关函数');
+        }
+
+        // ADF 结果
+        const orig = data.original;
+        const diff = data.diff_1;
+        document.getElementById('adfResult').innerHTML = `
+            <div class="card card-body">
+                <h6>ADF 单位根检验结果</h6>
+                <table class="table table-sm table-bordered mb-2">
+                    <thead class="table-dark"><tr><th>序列</th><th>ADF 统计量</th><th>p 值</th><th>结论</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td>原始序列</td>
+                            <td>${orig.adf_statistic}</td>
+                            <td>${orig.p_value}</td>
+                            <td><span class="badge ${orig.is_stationary ? 'bg-success' : 'bg-danger'}">${orig.is_stationary ? '平稳' : '非平稳'}</span></td>
+                        </tr>
+                        <tr>
+                            <td>一阶差分</td>
+                            <td>${diff.adf_statistic}</td>
+                            <td>${diff.p_value}</td>
+                            <td><span class="badge ${diff.is_stationary ? 'bg-success' : 'bg-danger'}">${diff.is_stationary ? '平稳' : '非平稳'}</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="mb-0 small text-muted">
+                    <strong>原始序列</strong>：${orig.interpretation}<br>
+                    <strong>一阶差分</strong>：${diff.interpretation}
+                    ${!orig.is_stationary && diff.is_stationary ? '<br><strong>结论</strong>：需要一阶差分（d=1）使序列平稳，满足 ARIMA 模型假设。' : ''}
+                </p>
+            </div>
+        `;
+
+        showToast('平稳性检验完成', 'success');
+    } catch (error) {
+        console.error('[时序] 检验失败:', error);
+        showToast('平稳性检验失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 训练时序模型
+ */
+async function trainTimeseriesModels() {
+    showToast('正在训练 ARIMA / SARIMA 模型...', 'warning');
+    try {
+        const data = await Api.fitTimeseriesModels();
+        console.log('[时序] 模型训练完成:', data);
+
+        // 获取拟合数据用于图表
+        const tsData = await Api.getTimeseriesData();
+        const forecastData = await Api.getTimeseriesForecast(7);
+
+        // 绘制拟合效果图
+        const chartData = {
+            dates: tsData.dates,
+            actual: tsData.daily_amount,
+            fitted_sarima: null, // 后端返回拟合值列表，需对齐
+            forecast: forecastData.sarima.forecast,
+            lower_bound: [...new Array(tsData.dates.length).fill(null), ...forecastData.sarima.lower_bound],
+            upper_bound: [...new Array(tsData.dates.length).fill(null), ...forecastData.sarima.upper_bound]
+        };
+
+        // 合并日期
+        chartData.dates = [...tsData.dates, ...forecastData.sarima.dates];
+        chartData.actual = [...tsData.daily_amount, ...new Array(forecastData.sarima.dates.length).fill(null)];
+        chartData.forecast = [...new Array(tsData.dates.length).fill(null), ...forecastData.sarima.forecast];
+
+        AppState.charts.tsFit = Charts.initTimeseriesChart('tsFitChart', chartData);
+
+        // 评估指标表
+        const arima = data.arima.metrics;
+        const sarima = data.sarima.metrics;
+        document.getElementById('tsEvalTable').innerHTML = `
+            <table class="table table-sm table-bordered mb-0">
+                <thead class="table-dark"><tr><th>指标</th><th>ARIMA</th><th>SARIMA</th></tr></thead>
+                <tbody>
+                    <tr><td>MAE</td><td>${arima.MAE.toLocaleString()}</td><td>${sarima.MAE.toLocaleString()}</td></tr>
+                    <tr><td>MSE</td><td>${arima.MSE.toLocaleString()}</td><td>${sarima.MSE.toLocaleString()}</td></tr>
+                    <tr><td>RMSE</td><td>${arima.RMSE.toLocaleString()}</td><td>${sarima.RMSE.toLocaleString()}</td></tr>
+                    <tr><td>R²</td><td>${arima.R2}</td><td>${sarima.R2}</td></tr>
+                    <tr><td>MAPE</td><td>${arima.MAPE}%</td><td>${sarima.MAPE}%</td></tr>
+                    <tr><td>AIC</td><td>${data.arima.aic}</td><td>${data.sarima.aic}</td></tr>
+                    <tr><td>训练耗时</td><td>${data.arima.train_time}s</td><td>${data.sarima.train_time}s</td></tr>
+                </tbody>
+            </table>
+        `;
+
+        showToast('时序模型训练完成', 'success');
+    } catch (error) {
+        console.error('[时序] 训练失败:', error);
+        showToast('模型训练失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 执行预测
+ */
+async function runTimeseriesForecast() {
+    const steps = parseInt(document.getElementById('tsForecastSteps').value) || 7;
+    showToast(`正在预测未来 ${steps} 天...`, 'info');
+    try {
+        const tsData = await Api.getTimeseriesData();
+        const forecastData = await Api.getTimeseriesForecast(steps);
+        console.log('[时序] 预测完成:', steps, '天');
+
+        // 构建图表数据
+        const allDates = [...tsData.dates, ...forecastData.sarima.dates];
+        const actualPadded = [...tsData.daily_amount, ...new Array(steps).fill(null)];
+        const forecastPadded = [...new Array(tsData.dates.length).fill(null), ...forecastData.sarima.forecast];
+        const lowerPadded = [...new Array(tsData.dates.length).fill(null), ...forecastData.sarima.lower_bound];
+        const upperPadded = [...new Array(tsData.dates.length).fill(null), ...forecastData.sarima.upper_bound];
+
+        AppState.charts.tsForecast = Charts.initTimeseriesChart('tsForecastChart', {
+            dates: allDates,
+            actual: actualPadded,
+            forecast: forecastPadded,
+            lower_bound: lowerPadded,
+            upper_bound: upperPadded
+        });
+
+        // 预测表格
+        const sarima = forecastData.sarima;
+        let tableHtml = '<div class="card card-body"><h6>SARIMA 预测结果</h6>';
+        tableHtml += '<table class="table table-sm table-bordered"><thead class="table-dark"><tr><th>日期</th><th>预测值</th><th>95% 下界</th><th>95% 上界</th></tr></thead><tbody>';
+        for (let i = 0; i < steps; i++) {
+            tableHtml += `<tr><td>${sarima.dates[i]}</td><td>¥${sarima.forecast[i].toLocaleString()}</td><td>¥${sarima.lower_bound[i].toLocaleString()}</td><td>¥${sarima.upper_bound[i].toLocaleString()}</td></tr>`;
+        }
+        tableHtml += '</tbody></table></div>';
+        document.getElementById('tsForecastTable').innerHTML = tableHtml;
+
+        showToast(`未来 ${steps} 天预测完成`, 'success');
+    } catch (error) {
+        console.error('[时序] 预测失败:', error);
+        showToast('预测失败: ' + error.message, 'danger');
+    }
+}
+
+/**
+ * 生成时序分析报告
+ */
+async function loadTimeseriesReport() {
+    showToast('正在生成时序分析报告...', 'info');
+    const body = document.getElementById('tsReportBody');
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><p class="mt-2 text-muted">正在执行全流程分析...</p></div>';
+
+    try {
+        const data = await Api.getTimeseriesReport();
+        console.log('[时序] 报告生成完成');
+
+        let html = '';
+        if (data.sections) {
+            data.sections.forEach(section => {
+                html += `
+                    <div class="card mb-3 border-0 shadow-sm">
+                        <div class="card-header bg-light fw-bold">${section.title}</div>
+                        <div class="card-body"><div class="ai-section-content">${formatMarkdown(section.content)}</div></div>
+                    </div>
+                `;
+            });
+        }
+
+        body.innerHTML = html || '<p class="text-muted">报告为空</p>';
+        showToast('时序分析报告生成完成', 'success');
+    } catch (error) {
+        console.error('[时序] 报告生成失败:', error);
+        body.innerHTML = `<div class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle fs-1"></i><p class="mt-2">生成失败: ${error.message}</p></div>`;
+        showToast('报告生成失败: ' + error.message, 'danger');
+    }
+}

@@ -1,13 +1,14 @@
-# 电商刷单异常检测系统 v2.1.0
+# 电商刷单异常检测系统 v2.2.0
 
-基于《电商平台刷单行为的异常检测论文》开发的 Python 后端 + Web 前端可视化平台，集成 Spark 大数据分析与 AI 智能综述。
+基于《电商平台刷单行为的异常检测论文》开发的 Python 后端 + Web 前端可视化平台，集成 Spark 大数据分析、时间序列分析与 AI 智能综述。
 
 ## 项目简介
 
-本系统实现了电商刷单行为的异常检测与可视化分析，包含两大核心引擎：
+本系统实现了电商刷单行为的异常检测与可视化分析，包含三大核心引擎：
 
 - **sklearn 引擎**：孤立森林（Isolation Forest）、LOF、One-Class SVM 三种算法的训练、预测与评估
 - **Spark 引擎**：Spark SQL 多维分析、MLlib 分布式模型训练（KMeans/GMM）、Structured Streaming 实时检测
+- **时序分析引擎**：ADF 平稳性检验、ACF/PACF 分析、ARIMA/SARIMA 建模、未来 N 天预测
 
 前端提供交互式可视化大屏，支持阈值调整、模型训练、数据集上传、实时流检测、AI 智能综述等功能。
 
@@ -185,6 +186,17 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 | `/api/spark/streaming/results` | GET | 最新检测结果 |
 | `/api/spark/streaming/statistics` | GET | 检测结果统计 |
 
+### 时序分析接口 (`/api/timeseries`)
+
+| 接口 | 方法 | 说明 |
+|------|------|------|
+| `/api/timeseries/data` | GET | 获取日级时序数据（90 天聚合） |
+| `/api/timeseries/stationarity` | GET | ADF 平稳性检验 + ACF/PACF |
+| `/api/timeseries/fit` | POST | 训练 ARIMA / SARIMA 模型 |
+| `/api/timeseries/forecast` | GET | 未来 N 天预测（含 95% 置信区间） |
+| `/api/timeseries/evaluate` | GET | 模型评估指标（MAE/MSE/RMSE/R²/MAPE） |
+| `/api/timeseries/report` | GET | 时序分析综合报告 |
+
 ## 功能说明
 
 ### 1. 项目概览模块
@@ -230,7 +242,16 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 - 实时统计：总检测数、异常数、异常率、平均分数
 - 结果表格 + 分数分布图自动刷新（3 秒间隔）
 
-### 9. AI 智能综述
+### 9. 时间序列分析
+- **数据转换**：将 37,000+ 条交易记录聚合为 90 天日级时序数据
+- **平稳性检验**：ADF 单位根检验（原始序列 + 一阶差分）
+- **自相关分析**：ACF 自相关图、PACF 偏自相关图（含 95% 置信区间）
+- **双模型对比**：ARIMA(1,1,1) vs SARIMA(1,1,1)×(1,1,1,7)
+- **模型评估**：MAE、MSE、RMSE、R²、MAPE 五项指标对比
+- **未来预测**：支持 7/14/30 天预测，含 95% 置信区间可视化
+- **分析报告**：一键生成包含数据概况、检验结果、模型对比、业务解读的完整报告
+
+### 10. AI 智能综述
 - 基于检测数据的本地模板引擎，不依赖外部 API
 - 自动生成 5 段式分析报告：数据概览、模型评估、特征分析、风险发现、建议
 - 触发方式：训练完成后自动弹出 + 手动点击「AI 综述」按钮
@@ -304,6 +325,7 @@ curl -X POST http://localhost:8000/api/data/upload -F "file=@your_dataset.csv"
 
 | 版本 | 日期 | 变更内容 |
 |------|------|---------|
+| v2.2.0 | 2026-06-04 | 新增时间序列分析模块：ADF 平稳性检验、ACF/PACF 分析、ARIMA/SARIMA 建模、未来 7/14/30 天预测、模型评估指标对比、时序分析报告；新增 statsmodels 依赖 |
 | v2.1.0 | 2026-06-03 | 替换为真实标注数据集（10,000 条，95 条刷单）；新增 `is_cheat` 标签列支持；新增 AI 智能综述功能；修复 Spark MLlib 模型覆盖写入问题；修复前端 Modal 冲突和缓存问题 |
 | v2.0.0 | 2026-06-03 | 集成 Spark 大数据分析：Spark SQL 多维分析、MLlib 模型训练（KMeans/GMM）、Structured Streaming 实时检测；前端新增 Spark 分析面板；数据集拖拽上传 |
 | v1.0.0 | 2026-06-02 | 初始版本：sklearn 三算法（Isolation Forest/LOF/OCSVM）训练与评估；可视化大屏；参数调优；嫌疑订单查询 |

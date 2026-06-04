@@ -14,7 +14,7 @@ import logging
 
 from config import SERVER_PORT, FRONTEND_DIR
 from utils.helpers import setup_logging
-from routers import data_router, model_router, analysis_router, spark_router
+from routers import data_router, model_router, analysis_router, spark_router, timeseries_router
 
 # 配置日志
 setup_logging()
@@ -56,7 +56,7 @@ async def lifespan(app):
 app = FastAPI(
     title="电商刷单异常检测系统",
     description="基于孤立森林算法的电商刷单行为异常检测API服务",
-    version="2.1.0",
+    version="2.2.0",
     lifespan=lifespan
 )
 
@@ -74,6 +74,7 @@ app.include_router(data_router.router)
 app.include_router(model_router.router)
 app.include_router(analysis_router.router)
 app.include_router(spark_router.router)
+app.include_router(timeseries_router.router)
 
 # 托管前端静态文件
 if os.path.exists(FRONTEND_DIR):

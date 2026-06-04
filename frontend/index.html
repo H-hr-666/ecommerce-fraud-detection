@@ -26,6 +26,9 @@
                 <button class="btn btn-outline-info btn-sm me-2" onclick="toggleSparkPanel()">
                     <i class="bi bi-lightning"></i> Spark 分析
                 </button>
+                <button class="btn btn-outline-success btn-sm me-2" onclick="toggleTsPanel()">
+                    <i class="bi bi-graph-up"></i> 时序分析
+                </button>
                 <button class="btn btn-outline-warning btn-sm me-2" onclick="showAiSummary()">
                     <i class="bi bi-robot"></i> AI 综述
                 </button>
@@ -431,6 +434,206 @@
             </div>
         </div>
 
+        <!-- 时序分析面板（可折叠） -->
+        <div class="row mb-4" id="tsPanel" style="display: none;">
+            <div class="col-12">
+                <div class="card border-success">
+                    <div class="card-header bg-success bg-gradient text-white d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-graph-up"></i> 时间序列分析（SARIMA / ARIMA）</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" id="tsStatusBadge">
+                                <i class="bi bi-circle-fill text-secondary"></i> 未初始化
+                            </span>
+                            <button class="btn btn-sm btn-outline-light" onclick="toggleTsPanel()">
+                                <i class="bi bi-chevron-up"></i> 收起
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <!-- 时序功能选项卡 -->
+                        <ul class="nav nav-tabs nav-fill" id="tsTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="ts-data-tab" data-bs-toggle="tab"
+                                    data-bs-target="#ts-data-panel" type="button" role="tab">
+                                    <i class="bi bi-clock-history"></i> 时序数据
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ts-test-tab" data-bs-toggle="tab"
+                                    data-bs-target="#ts-test-panel" type="button" role="tab">
+                                    <i class="bi bi-clipboard-data"></i> 平稳性检验
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ts-model-tab" data-bs-toggle="tab"
+                                    data-bs-target="#ts-model-panel" type="button" role="tab">
+                                    <i class="bi bi-cpu"></i> 模型训练
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ts-forecast-tab" data-bs-toggle="tab"
+                                    data-bs-target="#ts-forecast-panel" type="button" role="tab">
+                                    <i class="bi bi-bar-chart-line"></i> 预测分析
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ts-report-tab" data-bs-toggle="tab"
+                                    data-bs-target="#ts-report-panel" type="button" role="tab">
+                                    <i class="bi bi-file-text"></i> 分析报告
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content p-3" id="tsTabContent">
+                            <!-- 时序数据 Tab -->
+                            <div class="tab-pane fade show active" id="ts-data-panel" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <button class="btn btn-success btn-sm me-2" onclick="loadTimeseriesData()">
+                                            <i class="bi bi-arrow-clockwise"></i> 加载时序数据
+                                        </button>
+                                        <small class="text-muted">将 37,000+ 条交易记录聚合为 90 天日级时序</small>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <div class="card">
+                                            <div class="card-header py-2">
+                                                <i class="bi bi-graph-up"></i> 日交易额时序图
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="tsLineChart" style="height: 350px;">
+                                                    <div class="d-flex justify-content-center align-items-center h-100 text-muted">
+                                                        点击"加载时序数据"查看结果
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div id="tsStatsInfo" class="small text-muted">加载数据后显示统计信息</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 平稳性检验 Tab -->
+                            <div class="tab-pane fade" id="ts-test-panel" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <button class="btn btn-primary btn-sm me-2" onclick="runStationarityTest()">
+                                            <i class="bi bi-play-circle"></i> 执行 ADF 检验
+                                        </button>
+                                        <small class="text-muted">ADF 单位根检验 + ACF/PACF 自相关分析</small>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header py-2"><i class="bi bi-bar-chart"></i> ACF 自相关</div>
+                                            <div class="card-body"><div id="acfChart" style="height: 280px;"><div class="text-center text-muted py-5">请先执行检验</div></div></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header py-2"><i class="bi bi-bar-chart-fill"></i> PACF 偏自相关</div>
+                                            <div class="card-body"><div id="pacfChart" style="height: 280px;"><div class="text-center text-muted py-5">请先执行检验</div></div></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div id="adfResult" class="small"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 模型训练 Tab -->
+                            <div class="tab-pane fade" id="ts-model-panel" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <button class="btn btn-warning btn-sm me-2" onclick="trainTimeseriesModels()">
+                                            <i class="bi bi-play-circle"></i> 训练 ARIMA / SARIMA
+                                        </button>
+                                        <small class="text-muted">对比 ARIMA(1,1,1) 和 SARIMA(1,1,1)×(1,1,1,7)</small>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-8 mb-3">
+                                        <div class="card">
+                                            <div class="card-header py-2"><i class="bi bi-graph-up"></i> 拟合效果对比</div>
+                                            <div class="card-body"><div id="tsFitChart" style="height: 350px;"><div class="text-center text-muted py-5">请先训练模型</div></div></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <div class="card">
+                                            <div class="card-header py-2"><i class="bi bi-table"></i> 评估指标</div>
+                                            <div class="card-body p-0" id="tsEvalTable">
+                                                <div class="text-center text-muted py-5">请先训练模型</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 预测分析 Tab -->
+                            <div class="tab-pane fade" id="ts-forecast-panel" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-12 d-flex align-items-center flex-wrap gap-2">
+                                        <button class="btn btn-success btn-sm" onclick="runTimeseriesForecast()">
+                                            <i class="bi bi-play-fill"></i> 执行预测
+                                        </button>
+                                        <div class="input-group input-group-sm" style="width: 180px;">
+                                            <span class="input-group-text">预测天数</span>
+                                            <select class="form-select" id="tsForecastSteps">
+                                                <option value="7" selected>7 天</option>
+                                                <option value="14">14 天</option>
+                                                <option value="30">30 天</option>
+                                            </select>
+                                        </div>
+                                        <small class="text-muted">使用 SARIMA 模型进行未来 N 天预测</small>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <div class="card">
+                                            <div class="card-header py-2"><i class="bi bi-bar-chart-line"></i> 预测结果（含 95% 置信区间）</div>
+                                            <div class="card-body"><div id="tsForecastChart" style="height: 400px;"><div class="text-center text-muted py-5">请先执行预测</div></div></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div id="tsForecastTable" class="small"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 分析报告 Tab -->
+                            <div class="tab-pane fade" id="ts-report-panel" role="tabpanel">
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <button class="btn btn-dark btn-sm me-2" onclick="loadTimeseriesReport()">
+                                            <i class="bi bi-file-text"></i> 生成分析报告
+                                        </button>
+                                        <small class="text-muted">一键完成全流程分析并生成报告</small>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div id="tsReportBody">
+                                            <div class="text-center text-muted py-5">点击"生成分析报告"查看</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- 第二行：图表区域 -->
         <div class="row mb-4">
             <!-- 异常分数分布直方图 -->
@@ -599,8 +802,8 @@
     <!-- ECharts -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 
-    <script src="/static/js/api.js?v=2.1"></script>
-    <script src="/static/js/charts.js?v=2.1"></script>
-    <script src="/static/js/app.js?v=2.1"></script>
+    <script src="/static/js/api.js?v=2.2"></script>
+    <script src="/static/js/charts.js?v=2.2"></script>
+    <script src="/static/js/app.js?v=2.2"></script>
 </body>
 </html>

@@ -237,5 +237,49 @@ const Api = {
      */
     async getStreamingStatistics() {
         return await this.request('/api/spark/streaming/statistics');
+    },
+
+    // ==================== 时序分析 API ====================
+
+    /**
+     * 获取时序数据
+     */
+    async getTimeseriesData() {
+        return await this.request('/api/timeseries/data');
+    },
+
+    /**
+     * 获取平稳性检验结果
+     */
+    async getTimeseriesStationarity() {
+        return await this.request('/api/timeseries/stationarity');
+    },
+
+    /**
+     * 训练时序模型
+     */
+    async fitTimeseriesModels() {
+        return await this.request('/api/timeseries/fit', { method: 'POST' });
+    },
+
+    /**
+     * 获取时序预测
+     */
+    async getTimeseriesForecast(steps = 7) {
+        return await this.request(`/api/timeseries/forecast?steps=${steps}`);
+    },
+
+    /**
+     * 获取时序模型评估
+     */
+    async getTimeseriesEvaluate() {
+        return await this.request('/api/timeseries/evaluate');
+    },
+
+    /**
+     * 获取时序分析报告
+     */
+    async getTimeseriesReport() {
+        return await this.request('/api/timeseries/report');
     }
 };
