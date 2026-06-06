@@ -37,6 +37,7 @@ backend/models/*.pkl
 # Data files (large files) - 保留内置数据集
 backend/data/*.csv
 !backend/data/ecommerce_transactions.csv
+!backend/data/creditcard_raw.csv
 
 # Logs
 *.log
