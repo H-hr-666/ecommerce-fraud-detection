@@ -56,7 +56,7 @@ async def lifespan(app):
 app = FastAPI(
     title="电商刷单异常检测系统",
     description="基于孤立森林算法的电商刷单行为异常检测API服务",
-    version="2.2.0",
+    version="2.5.0",
     lifespan=lifespan
 )
 
