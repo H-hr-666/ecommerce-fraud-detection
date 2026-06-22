@@ -51,3 +51,10 @@ backend/data/streaming_checkpoint/
 
 # Spark models
 backend/models/spark/
+
+# Word temp files
+~$*
+
+# Paper output (separate from code)
+*.docx
+~

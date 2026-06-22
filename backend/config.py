@@ -46,6 +46,24 @@ GRID_SEARCH_PARAMS = {
 # 默认异常分数阈值
 DEFAULT_THRESHOLD = 0.8
 
+# MySQL 数据源配置（本地 Windows MySQL）
+MYSQL_CONFIG = {
+    "host": "localhost",
+    "port": 3306,
+    "user": "root",
+    "password": "root",
+    "database": "ecommerce_fraud",
+    "table": "transactions"
+}
+
+# Spark 远程连接配置（VM hadoop100）
+# 方案说明：跨机器 client 模式有双向通信问题，实战最佳方案是：
+# Spark 计算在 Windows 本地跑（local[*]），HDFS 存储指向 VM
+# 这样 PySpark 可以正常使用，VM 的 HDFS/YARN 提供完整的大数据生态展示
+SPARK_REMOTE_MASTER = "spark://hadoop100:7077"
+SPARK_USE_REMOTE = False  # True=连接VM Spark集群, False=本地local[*]模式
+VM_HDFS = "hdfs://hadoop100:9000"  # VM HDFS 地址（供外部写入/读取）
+
 # 特征列名
 FEATURE_COLUMNS = ["log_amount", "time_diff", "is_rush_hour", "device_type"]
 

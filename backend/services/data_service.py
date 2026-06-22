@@ -1,6 +1,7 @@
 """
 数据服务模块
 负责数据集加载、清洗、描述性统计
+支持 MySQL、CSV 两种数据源
 """
 
 import pandas as pd
@@ -9,9 +10,35 @@ from typing import Optional, Dict, List
 import os
 import logging
 
-from config import DATASET_PATH, RAW_COLUMNS
+from config import DATASET_PATH, RAW_COLUMNS, MYSQL_CONFIG
 
 logger = logging.getLogger(__name__)
+
+
+def load_from_mysql() -> pd.DataFrame:
+    """
+    从本地 MySQL 数据库加载电商交易数据
+
+    Returns:
+        从 ecommerce_fraud.transactions 表加载的 DataFrame
+    """
+    import pymysql
+
+    conn = pymysql.connect(
+        host=MYSQL_CONFIG["host"],
+        port=MYSQL_CONFIG["port"],
+        user=MYSQL_CONFIG["user"],
+        password=MYSQL_CONFIG["password"],
+        database=MYSQL_CONFIG["database"],
+        charset="utf8mb4"
+    )
+
+    query = f"SELECT user_id, order_id, amount, time_diff, order_time, device_type, is_cheat FROM {MYSQL_CONFIG['table']}"
+    df = pd.read_sql(query, conn)
+    conn.close()
+
+    logger.info(f"从 MySQL 加载 {len(df)} 条数据（{MYSQL_CONFIG['host']}:{MYSQL_CONFIG['port']}/{MYSQL_CONFIG['database']}.{MYSQL_CONFIG['table']}）")
+    return df
 
 
 def generate_sample_dataset(n_samples: int = 38662) -> pd.DataFrame:
@@ -75,7 +102,7 @@ def generate_sample_dataset(n_samples: int = 38662) -> pd.DataFrame:
 
 def load_dataset(file_path: Optional[str] = None) -> pd.DataFrame:
     """
-    加载数据集
+    加载数据集（优先从 MySQL，回退到 CSV）
 
     Args:
         file_path: 数据集文件路径，为None时使用默认路径
@@ -83,6 +110,15 @@ def load_dataset(file_path: Optional[str] = None) -> pd.DataFrame:
     Returns:
         加载的DataFrame
     """
+    # 1. 优先从 MySQL 读取
+    try:
+        df = load_from_mysql()
+        if len(df) > 0:
+            return df
+    except Exception as e:
+        logger.warning(f"MySQL 读取失败，回退到 CSV: {e}")
+
+    # 2. 回退到 CSV 文件
     if file_path is None:
         file_path = DATASET_PATH
 
@@ -92,7 +128,6 @@ def load_dataset(file_path: Optional[str] = None) -> pd.DataFrame:
     else:
         logger.warning(f"数据集文件不存在: {file_path}，生成模拟数据集")
         df = generate_sample_dataset()
-        # 保存生成的数据集
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         df.to_csv(file_path, index=False)
 

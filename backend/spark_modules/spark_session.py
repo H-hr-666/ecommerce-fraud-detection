@@ -8,7 +8,7 @@ import threading
 import logging
 from pyspark.sql import SparkSession
 
-from config import SPARK_CONFIG
+from config import SPARK_CONFIG, SPARK_REMOTE_MASTER, SPARK_USE_REMOTE
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +45,18 @@ def get_spark_session(app_name: str = "EcommerceFraudDetection") -> SparkSession
         if _spark_session is not None:
             return _spark_session
 
-        logger.info("正在创建 SparkSession (Local 模式)...")
-        _spark_session = (
+        # 根据配置选择 master
+        if SPARK_USE_REMOTE:
+            master_url = SPARK_REMOTE_MASTER
+            logger.info(f"正在创建 SparkSession (远程模式: {master_url})...")
+        else:
+            master_url = "local[*]"
+            logger.info("正在创建 SparkSession (Local 模式)...")
+
+        builder = (
             SparkSession.builder
             .appName(app_name)
-            .master("local[*]")
+            .master(master_url)
             .config("spark.driver.memory", SPARK_CONFIG["driver_memory"])
             .config("spark.executor.memory", SPARK_CONFIG["driver_memory"])
             .config("spark.sql.shuffle.partitions", str(SPARK_CONFIG["shuffle_partitions"]))
@@ -57,15 +64,31 @@ def get_spark_session(app_name: str = "EcommerceFraudDetection") -> SparkSession
             .config("spark.ui.enabled", "false")
             .config("spark.eventLog.enabled", "false")
             .config("spark.sql.execution.arrow.pyspark.enabled", "true")
-            .config("spark.driver.bindAddress", "127.0.0.1")
-            # 强制使用本地文件系统，避免 PySpark 默认尝试连接 HDFS
-            .config("spark.hadoop.fs.defaultFS", "file:///")
-            .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse")
-            .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
-            .getOrCreate()
         )
+
+        if SPARK_USE_REMOTE:
+            # 远程模式：连接到 VM 的 HDFS 和 YARN
+            builder = (
+                builder
+                .config("spark.driver.bindAddress", "0.0.0.0")
+                .config("spark.driver.host", "192.168.10.1")  # Windows 本机 IP
+                .config("spark.hadoop.fs.defaultFS", "hdfs://hadoop100:9000")
+                .config("spark.sql.warehouse.dir", "hdfs://hadoop100:9000/user/hive/warehouse")
+                .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+            )
+        else:
+            # 本地模式
+            builder = (
+                builder
+                .config("spark.driver.bindAddress", "127.0.0.1")
+                .config("spark.hadoop.fs.defaultFS", "file:///")
+                .config("spark.sql.warehouse.dir", "file:///tmp/spark-warehouse")
+                .config("spark.hadoop.dfs.client.use.datanode.hostname", "true")
+            )
+
+        _spark_session = builder.getOrCreate()
         _spark_session.sparkContext.setLogLevel("WARN")
-        logger.info(f"SparkSession 创建成功: Local[*], driver.memory={SPARK_CONFIG['driver_memory']}, version={_spark_session.version}")
+        logger.info(f"SparkSession 创建成功: {master_url}, driver.memory={SPARK_CONFIG['driver_memory']}, version={_spark_session.version}")
 
     return _spark_session
 
